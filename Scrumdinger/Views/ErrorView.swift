@@ -1,9 +1,6 @@
-/*
- See LICENSE folder for this sample’s licensing information.
- */
-
 import SwiftUI
 
+@available(iOS 15.0, macOS 12.0, *)
 struct ErrorView: View {
     let errorWrapper: ErrorWrapper
     @Environment(\.dismiss) private var dismiss
@@ -25,13 +22,16 @@ struct ErrorView: View {
             .background(.ultraThinMaterial)
             .cornerRadius(16)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Dismiss") {
                         dismiss()
                     }
                 }
             }
         }
+        #if os(macOS)
+        .frame(minWidth: 300, minHeight: 300)
+        #endif
     }
 }
 

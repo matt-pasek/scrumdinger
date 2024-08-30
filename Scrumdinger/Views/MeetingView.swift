@@ -1,7 +1,3 @@
-/*
- See LICENSE folder for this sample’s licensing information.
- */
-
 import SwiftUI
 import AVFoundation
 
@@ -31,7 +27,12 @@ struct MeetingView: View {
         .onDisappear {
             endScrum()
         }
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
+        #if os(macOS)
+        .frame(minWidth: 400, minHeight: 400)
+        #endif
     }
     
     private func startScrum() {

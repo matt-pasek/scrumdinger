@@ -1,7 +1,3 @@
-/*
- See LICENSE folder for this sample’s licensing information.
- */
-
 import SwiftUI
 
 struct ThemePicker: View {
@@ -14,7 +10,11 @@ struct ThemePicker: View {
                     .tag(theme)
             }
         }
+        #if os(iOS)
         .pickerStyle(.navigationLink)
+        #elseif os(macOS)
+        .pickerStyle(.menu)
+        #endif
     }
 }
 

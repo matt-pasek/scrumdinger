@@ -7,6 +7,10 @@ import AVFoundation
 import Speech
 import SwiftUI
 
+#if os(iOS)
+import AVFAudio
+#endif
+
 /// A helper for transcribing speech to text using SFSpeechRecognizer and AVAudioEngine.
 actor SpeechRecognizer: ObservableObject {
     enum RecognizerError: Error {
@@ -26,36 +30,34 @@ actor SpeechRecognizer: ObservableObject {
     }
     
     @MainActor var transcript: String = ""
-    
-    private var audioEngine: AVAudioEngine?
-    private var request: SFSpeechAudioBufferRecognitionRequest?
-    private var task: SFSpeechRecognitionTask?
-    private let recognizer: SFSpeechRecognizer?
-    
-    /**
-     Initializes a new speech recognizer. If this is the first time you've used the class, it
-     requests access to the speech recognizer and the microphone.
-     */
-    init() {
-        recognizer = SFSpeechRecognizer()
-        guard recognizer != nil else {
-            transcribe(RecognizerError.nilRecognizer)
-            return
-        }
-        
-        Task {
-            do {
-                guard await SFSpeechRecognizer.hasAuthorizationToRecognize() else {
-                    throw RecognizerError.notAuthorizedToRecognize
+
+        private var audioEngine: AVAudioEngine?
+        private var request: SFSpeechAudioBufferRecognitionRequest?
+        private var task: SFSpeechRecognitionTask?
+        private let recognizer: SFSpeechRecognizer?
+
+        init() {
+            recognizer = SFSpeechRecognizer()
+            guard recognizer != nil else {
+                transcribe(RecognizerError.nilRecognizer)
+                return
+            }
+
+            Task {
+                do {
+                    guard await SFSpeechRecognizer.hasAuthorizationToRecognize() else {
+                        throw RecognizerError.notAuthorizedToRecognize
+                    }
+                    #if os(iOS)
+                    guard await AVAudioSession.sharedInstance().hasPermissionToRecord() else {
+                        throw RecognizerError.notPermittedToRecord
+                    }
+                    #endif
+                } catch {
+                    transcribe(error)
                 }
-                guard await AVAudioSession.sharedInstance().hasPermissionToRecord() else {
-                    throw RecognizerError.notPermittedToRecord
-                }
-            } catch {
-                transcribe(error)
             }
         }
-    }
     
     @MainActor func startTranscribing() {
         Task {
@@ -110,25 +112,28 @@ actor SpeechRecognizer: ObservableObject {
     }
     
     private static func prepareEngine() throws -> (AVAudioEngine, SFSpeechAudioBufferRecognitionRequest) {
-        let audioEngine = AVAudioEngine()
-        
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.playAndRecord, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-        let inputNode = audioEngine.inputNode
-        
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer: AVAudioPCMBuffer, when: AVAudioTime) in
-            request.append(buffer)
+            let audioEngine = AVAudioEngine()
+
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.shouldReportPartialResults = true
+
+            #if os(iOS)
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playAndRecord, mode: .default, options: .duckOthers)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            #endif
+
+            let inputNode = audioEngine.inputNode
+
+            let recordingFormat = inputNode.outputFormat(forBus: 0)
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer: AVAudioPCMBuffer, when: AVAudioTime) in
+                request.append(buffer)
+            }
+            audioEngine.prepare()
+            try audioEngine.start()
+
+            return (audioEngine, request)
         }
-        audioEngine.prepare()
-        try audioEngine.start()
-        
-        return (audioEngine, request)
-    }
     
     nonisolated private func recognitionHandler(audioEngine: AVAudioEngine, result: SFSpeechRecognitionResult?, error: Error?) {
         let receivedFinalResult = result?.isFinal ?? false
@@ -173,6 +178,7 @@ extension SFSpeechRecognizer {
     }
 }
 
+#if os(iOS)
 extension AVAudioSession {
     func hasPermissionToRecord() async -> Bool {
         await withCheckedContinuation { continuation in
@@ -182,3 +188,4 @@ extension AVAudioSession {
         }
     }
 }
+#endif
